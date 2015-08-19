@@ -1,0 +1,9 @@
+{
+  "name": "bogdananton/usw-gateway",
+  "license": "MIT",
+  "require": {
+    "php": "^5.3",
+    "league/route": "1.1.0",
+    "guzzlehttp/guzzle": "6.0.2"
+  }
+}
