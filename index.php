@@ -17,7 +17,7 @@ $rService = new \GuzzleHttp\Client([
     'base_uri' => 'https://sheltered-cliffs-5863.herokuapp.com/' // @todo replace URL
 ]);
 
-$router->addRoute('GET', '/hotels', function () use ($hService, $rService, $request) {
+$router->addRoute('GET', '/hotels', function (Request $request, $response, $args) use ($hService, $rService, $request) {
     $expandString = $request->get('expand');
     $expandList = explode(',', $expandString);
 
@@ -39,51 +39,93 @@ $router->addRoute('GET', '/hotels', function () use ($hService, $rService, $requ
             }
         }
 
-        return new JsonResponse($items, 200);
+        $return = json_encode($items);
 
     } catch (\GuzzleHttp\Exception\BadResponseException $e) {
-        return new JsonResponse($e->getResponse()->getBody()->getContents(), 400);
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
     }
+
+    return $response->setContent($return);
 });
 
-$router->addRoute('GET', '/rooms', function () use ($hService) {
+$router->addRoute('GET', '/rooms', function (Request $request, $response, $args) use ($hService) {
     try {
-        $listing = $hService->get('/rooms')->getBody()->getContents();
-        return new JsonResponse(json_decode($listing), 200);
+        $return = $hService->get('/rooms')->getBody()->getContents();
 
     } catch (\GuzzleHttp\Exception\BadResponseException $e) {
-        return new JsonResponse($e->getResponse()->getBody()->getContents(), 400);
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
     }
+
+    return $response->setContent($return);
 });
 
-$router->addRoute('GET', '/ratings', function () use ($rService) {
+$router->addRoute('GET', '/ratings', function (Request $request, $response, $args) use ($rService) {
     try {
-        $listing = $rService->get('/ratings')->getBody()->getContents();
-        return new JsonResponse(json_decode($listing), 200);
+        $return = $rService->get($request->getBaseUrl())->getBody()->getContents();
 
     } catch (\GuzzleHttp\Exception\BadResponseException $e) {
-        return new JsonResponse($e->getResponse()->getBody()->getContents(), 400);
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
     }
+
+    return $response->setContent($return);
 });
 
-$router->addRoute('GET', '/ratings/{id}', function () use ($rService, $args) {
+$router->addRoute('GET', '/ratings/{id}', function (Request $request, $response, $args) use ($rService) {
     try {
-        $listing = $rService->get('/ratings/' . $args['id'])->getBody()->getContents();
-        return new JsonResponse(json_decode($listing), 200);
+        $listing = $rService->get($request->getBaseUrl())->getBody()->getContents();
+        $return = $listing;
 
     } catch (\GuzzleHttp\Exception\BadResponseException $e) {
-        return new JsonResponse($e->getResponse()->getBody()->getContents(), 400);
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
     }
+
+    return $response->setContent($return);
 });
 
-$router->addRoute('GET', '/hotel/{hotelIdentifier}/ratings', function () use ($hService, $rService, $args) {
+$router->addRoute('GET', '/hotel/{hotelIdentifier}', function (Request $request, $response, $args) use ($hService, $rService, $request) {
+    $expandString = $request->get('expand');
+    $expandList = explode(',', $expandString);
+
     try {
-        $listing = $rService->get('/ratings?identifier=' . $args['hotelIdentifier'])->getBody()->getContents();
-        return new JsonResponse(json_decode($listing), 200);
+        $listing = $hService->get('/hotel/' . $args['hotelIdentifier'])->getBody()->getContents();
+        $item = json_decode($listing);
+
+        if (!is_object($item)) {
+            throw new InvalidArgumentException('Invalid response from hotels query.');
+        }
+
+        if (count($expandList) > 0 && in_array('ratings', $expandList)) {
+            $ratingsListingResponse = $rService->get('/ratings?hotel=' . $item->identifier);
+            $item->{'ratings'} = $ratingsListingResponse->getBody()->getContents();
+
+        } else {
+            $item->{'@ratings'} = '/ratings?hotel=' . $item->identifier;
+        }
+
+        $return = json_encode($item);
 
     } catch (\GuzzleHttp\Exception\BadResponseException $e) {
-        return new JsonResponse($e->getResponse()->getBody()->getContents(), 400);
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
     }
+
+    return $response->setContent($return);
+});
+
+$router->addRoute('GET', '/hotel/{hotelIdentifier}/ratings', function (Request $request, JsonResponse $response, $args) use ($hService, $rService) {
+    try {
+        $return = $rService->get('/ratings?identifier=' . $args['hotelIdentifier'])->getBody()->getContents();
+
+    } catch (\GuzzleHttp\Exception\BadResponseException $e) {
+        $return = $e->getResponse()->getBody()->getContents();
+        $response->setStatusCode(400);
+    }
+
+    return $response->setContent($return);
 });
 
 $errorMessage = '';
